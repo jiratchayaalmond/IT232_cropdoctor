@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>หมอพืช AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Prompt:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: field-notebook tool — left column = capture & workflow, right = diagnosis report; history below */
+:root{
+  --bg:#F3F5EE; --surface:#FFFFFF; --ink:#1E2A1F; --muted:#5E6B5C; --line:#DDE3D6;
+  --leaf:#2F6B3A; --leaf-soft:#E3EFDF; --soil:#8A5A2B;
+  --ok:#2E7D4F; --warn:#C27A12; --bad:#B6402E; --info:#2F5E8F;
+  --display:"Prompt","IBM Plex Sans Thai",system-ui,sans-serif;
+  --body:"IBM Plex Sans Thai","Prompt",system-ui,-apple-system,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121712; --surface:#1A211A; --ink:#E6ECE2; --muted:#9AA897; --line:#2C362B;
+  --leaf:#7CC48A; --leaf-soft:#20311F; --soil:#D2A06B;
+  --ok:#6CC58E; --warn:#E3A84A; --bad:#EE8270; --info:#86B2E0; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#121712; --surface:#1A211A; --ink:#E6ECE2; --muted:#9AA897; --line:#2C362B;
+  --leaf:#7CC48A; --leaf-soft:#20311F; --soil:#D2A06B;
+  --ok:#6CC58E; --warn:#E3A84A; --bad:#EE8270; --info:#86B2E0; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+h1,h2,h3{font-family:var(--display);line-height:1.25;margin:0;text-wrap:balance}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 48px;display:grid;gap:20px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding-bottom:14px;border-bottom:2px solid var(--leaf)}
+header h1{font-size:30px;color:var(--leaf)}
+header p{margin:2px 0 0;color:var(--muted)}
+.tag{font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 12px;background:var(--surface)}
+.main{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:20px;align-items:start}
+@media (max-width:860px){.main{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px}
+.panel h2{font-size:19px;display:flex;align-items:center;gap:10px}
+.num{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--leaf);color:var(--surface);font-size:14px;font-family:var(--display)}
+.drop{position:relative;border:2px dashed var(--line);border-radius:10px;min-height:190px;display:grid;place-items:center;text-align:center;padding:14px;cursor:pointer;background:var(--bg);transition:border-color .15s}
+.drop:hover,.drop.over,.drop:focus-within{border-color:var(--leaf)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drop img{max-width:100%;max-height:260px;border-radius:8px;display:block}
+.drop .hint{color:var(--muted);font-size:14px}
+.drop .hint strong{display:block;color:var(--ink);font-size:16px;font-family:var(--display);font-weight:500}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fields .full{grid-column:1/-1}
+label{font-size:14px;color:var(--muted);display:grid;gap:4px}
+select,input[type=text],textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+textarea{resize:vertical;min-height:58px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 14px}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--info);outline-offset:2px}
+.primary{background:var(--leaf);border-color:var(--leaf);color:var(--surface);font-family:var(--display);font-weight:600;font-size:17px;padding:12px}
+.primary:disabled{opacity:.45;cursor:not-allowed}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:14px}
+.steps li{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;color:var(--muted)}
+.steps li::before{content:"";width:12px;height:12px;margin:5px;border-radius:50%;border:2px solid var(--line)}
+.steps li.run{color:var(--ink)}
+.steps li.run::before{border-color:var(--info);border-top-color:transparent;animation:spin .8s linear infinite}
+.steps li.done{color:var(--ink)}
+.steps li.done::before{background:var(--ok);border-color:var(--ok)}
+.steps li.fail{color:var(--bad)}
+.steps li.fail::before{background:var(--bad);border-color:var(--bad)}
+.steps li.skip{opacity:.45}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.steps li.run::before{animation:none;background:var(--info)}}
+.notice{border-radius:8px;padding:10px 12px;font-size:15px;border-left:4px solid}
+.notice.warn{background:color-mix(in srgb,var(--warn) 12%,var(--surface));border-color:var(--warn)}
+.notice.bad{background:color-mix(in srgb,var(--bad) 12%,var(--surface));border-color:var(--bad)}
+.notice.info{background:color-mix(in srgb,var(--info) 10%,var(--surface));border-color:var(--info)}
+.sample-flag{font-size:13px;font-weight:600;color:var(--soil);border:1px dashed var(--soil);border-radius:999px;padding:2px 10px;justify-self:start}
+.diag-head{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+.diag-head img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.chip{display:inline-block;font-size:13px;font-weight:600;border-radius:999px;padding:2px 10px;margin-bottom:4px}
+.chip.disease{background:color-mix(in srgb,var(--bad) 15%,var(--surface));color:var(--bad)}
+.chip.pest{background:color-mix(in srgb,var(--soil) 18%,var(--surface));color:var(--soil)}
+.chip.healthy{background:color-mix(in srgb,var(--ok) 16%,var(--surface));color:var(--ok)}
+.chip.unknown{background:var(--bg);color:var(--muted)}
+.diag-head h3{font-size:24px}
+.diag-head .en{color:var(--muted);font-size:14px}
+.gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:480px){.gauges{grid-template-columns:1fr}}
+.gauge{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px}
+.gauge .k{font-size:13px;color:var(--muted)}
+.gauge .v{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar span{display:block;height:100%;border-radius:99px}
+.sevscale{display:grid;grid-template-columns:1fr 2fr 1.4fr;gap:3px;position:relative;margin-top:2px}
+.sevscale i{height:8px;border-radius:2px;opacity:.35}
+.sevscale i.on{opacity:1}
+.sevscale i:nth-child(1){background:var(--ok)}.sevscale i:nth-child(2){background:var(--warn)}.sevscale i:nth-child(3){background:var(--bad)}
+.sec{display:grid;gap:6px}
+.sec h4{margin:0;font-family:var(--display);font-size:16px;font-weight:600;color:var(--leaf)}
+.sec ul{margin:0;padding-left:20px}
+.sec li{margin:2px 0}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:14px;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:3px 9px}
+.src{font-size:13px;color:var(--muted)}
+.fb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line);padding-top:12px}
+.fb span{color:var(--muted);font-size:14px;margin-right:auto}
+.fb button.sel{border-color:var(--leaf);background:var(--leaf-soft)}
+.empty{color:var(--muted);text-align:center;padding:40px 10px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat .k{font-size:13px;color:var(--muted)}
+.stat .v{font-family:var(--display);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:500}
+.sevdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--surface)}
+details summary{cursor:pointer;font-weight:500}
+details p,details ul{margin:6px 0;font-size:14px}
+.kbgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px}
+a{color:var(--info)}
+.foot{color:var(--muted);font-size:13px;text-align:center}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>หมอพืช AI</h1>
+      <p>ถ่ายรูปใบไม้หรือลำต้นที่ผิดปกติ ระบบจะบอกชนิดโรคหรือแมลง ความรุนแรง และวิธีรักษาเบื้องต้น</p>
+    </div>
+    <span class="tag">IT232 · หัวข้อ 18 Crop Disease &amp; Pest Inspector</span>
+  </header>
+
+  <div class="main">
+    <!-- LEFT: input + workflow -->
+    <div style="display:grid;gap:20px">
+      <section class="panel" aria-labelledby="h-in">
+        <h2 id="h-in"><span class="num">1</span>ภาพและข้อมูลพืช</h2>
+        <div class="drop" id="drop">
+          <input type="file" id="file" accept="image/*" aria-label="เลือกหรือถ่ายภาพพืช">
+          <div id="dropInner" class="hint"><strong>แตะเพื่อถ่ายรูป หรือเลือกภาพ</strong>ลากไฟล์มาวางก็ได้ · JPG / PNG<br>ถ่ายใกล้ ๆ ให้เห็นอาการชัด ในที่มีแสง</div>
+        </div>
+        <div class="fields">
+          <label for="crop">ชนิดพืช
+            <select id="crop"></select>
+          </label>
+          <label for="age">อายุพืช
+            <input type="text" id="age" placeholder="เช่น 45 วัน, 3 ปี">
+          </label>
+          <label for="note" class="full">ข้อสังเกต (ถ้ามี)
+            <textarea id="note" placeholder="เช่น เริ่มเป็นหลังฝนตก ลามเร็วภายใน 3 วัน"></textarea>
+          </label>
+        </div>
+        <button class="primary" id="go" disabled>วิเคราะห์ภาพ</button>
+        <details id="keyBox">
+          <summary>ตั้งค่า Gemini API Key <span class="src" id="keyState"></span></summary>
+          <div style="display:grid;gap:8px;margin-top:8px">
+            <label for="apikey"><span>API Key · สร้างฟรีที่ <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></span>
+              <input type="text" id="apikey" placeholder="วาง API Key ที่นี่" autocomplete="off" spellcheck="false">
+            </label>
+            <label for="model">โมเดล
+              <select id="model"><option>gemini-3.5-flash</option><option>gemini-3.6-flash</option><option>gemini-3.1-flash-lite</option><option>gemini-2.5-flash</option></select>
+            </label>
+            <button id="saveKey">บันทึก</button>
+            <span class="src">Key เก็บไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น</span>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel" aria-labelledby="h-flow">
+        <h2 id="h-flow"><span class="num">2</span>ขั้นตอนการทำงาน</h2>
+        <ol class="steps" id="steps">
+          <li data-s="recv">รับภาพและข้อมูลจากเกษตรกร</li>
+          <li data-s="qc">ตรวจคุณภาพภาพ (เบลอ / มืด / เล็กเกินไป)</li>
+          <li data-s="pre">Pre-processing: ย่อขนาด ปรับคอนทราสต์</li>
+          <li data-s="ai">Vision AI วิเคราะห์และจำแนกโรค/ศัตรูพืช</li>
+          <li data-s="conf">ตรวจความมั่นใจ (เกณฑ์ ≥ 80%)</li>
+          <li data-s="sev">ประเมินความรุนแรงจาก % พื้นที่เสียหาย</li>
+          <li data-s="kb">ดึงวิธีรักษาจากฐานความรู้</li>
+          <li data-s="out">สรุปผลและบันทึกประวัติ</li>
+        </ol>
+        <div id="qcMsg"></div>
+      </section>
+    </div>
+
+    <!-- RIGHT: result -->
+    <section class="panel" aria-labelledby="h-out" id="result">
+      <h2 id="h-out"><span class="num">3</span>ผลการวิเคราะห์</h2>
+      <div id="out"></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-hist">
+    <div class="row">
+      <h2 id="h-hist"><span class="num">4</span>ประวัติและตัวชี้วัดของระบบ</h2>
+      <div style="display:flex;gap:8px">
+        <button id="copyCsv">คัดลอกเป็น CSV</button>
+        <button id="clearHist">ล้างประวัติ</button>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="tbl"><table>
+      <thead><tr><th>เวลา</th><th>พืช</th><th>ผลการจำแนก</th><th>ความมั่นใจ</th><th>ความรุนแรง</th><th>เวลาวิเคราะห์</th><th>Feedback</th></tr></thead>
+      <tbody id="histBody"></tbody>
+    </table></div>
+    <div id="copyMsg" class="src"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-kb">
+    <h2 id="h-kb"><span class="num">5</span>ฐานความรู้โรคพืชและแมลงศัตรูพืช</h2>
+    <p class="src" style="margin:0">ข้อมูลที่กลุ่มคัดไว้ เมื่อ AI จับคู่ได้ ระบบจะใช้วิธีรักษาจากส่วนนี้แทนคำตอบอิสระของ AI</p>
+    <div class="kbgrid" id="kbList"></div>
+  </section>
+
+  <p class="foot">ผลจากระบบเป็นคำแนะนำเบื้องต้น การใช้สารเคมีให้ทำตามฉลาก และปรึกษาเจ้าหน้าที่ส่งเสริมการเกษตรในพื้นที่</p>
+</div>
+
+<script>
+const KB = [{"id": "rice_blast", "crop": "ข้าว", "category": "disease", "name_th": "โรคไหม้ข้าว", "name_en": "Rice Blast", "cause": "เชื้อรา Pyricularia oryzae", "symptoms": ["แผลรูปตาหรือรูปกระสวยบนใบ ตรงกลางสีเทา ขอบสีน้ำตาล", "แผลขยายรวมกันจนใบแห้งตาย", "ถ้าเป็นที่คอรวง รวงจะหักพับ เมล็ดลีบ"], "treatment": ["ลดการใส่ปุ๋ยไนโตรเจนในช่วงที่มีการระบาด", "หลีกเลี่ยงการปลูกหนาแน่นเกินไป", "เมื่อพบแผลบนใบเกิน 5% ให้พ่นสารป้องกันกำจัดเชื้อรา"], "active_ingredients": ["ไตรไซคลาโซล (tricyclazole)", "ไอโซโพรไทโอเลน (isoprothiolane)", "อะซอกซีสโตรบิน (azoxystrobin)"], "prevention": ["ใช้พันธุ์ข้าวที่ต้านทานโรค", "คลุกเมล็ดพันธุ์ก่อนปลูก", "เผาหรือไถกลบตอซังที่เป็นโรค"]}, {"id": "rice_bacterial_leaf_blight", "crop": "ข้าว", "category": "disease", "name_th": "โรคขอบใบแห้ง", "name_en": "Bacterial Leaf Blight", "cause": "เชื้อแบคทีเรีย Xanthomonas oryzae pv. oryzae", "symptoms": ["แผลเริ่มจากขอบใบหรือปลายใบเป็นทางยาวสีเหลืองซีด", "แผลเปลี่ยนเป็นสีเทา ใบแห้งเป็นทาง", "อาจเห็นหยดน้ำสีครีมบนแผลตอนเช้า"], "treatment": ["ระบายน้ำออกจากแปลงที่เป็นโรค และไม่ปล่อยน้ำจากแปลงที่เป็นโรคไปแปลงอื่น", "งดใส่ปุ๋ยไนโตรเจนชั่วคราว", "ปรึกษาเจ้าหน้าที่เกษตรเรื่องการใช้สารกลุ่มคอปเปอร์ตามคำแนะนำ"], "active_ingredients": ["สารกลุ่มคอปเปอร์ (copper hydroxide) — ใช้ตามคำแนะนำของเจ้าหน้าที่"], "prevention": ["ใช้พันธุ์ต้านทาน", "กำจัดวัชพืชและหญ้าที่เป็นแหล่งอาศัยของเชื้อ", "ไม่ใส่ปุ๋ยไนโตรเจนมากเกินไป"]}, {"id": "rice_brown_spot", "crop": "ข้าว", "category": "disease", "name_th": "โรคใบจุดสีน้ำตาล", "name_en": "Rice Brown Spot", "cause": "เชื้อรา Bipolaris oryzae", "symptoms": ["จุดสีน้ำตาลรูปกลมหรือรีขนาดเท่าเมล็ดงา กระจายทั่วใบ", "ตรงกลางแผลอาจมีสีเทาหรือสีซีด", "เมล็ดอาจมีรอยด่างสีน้ำตาล"], "treatment": ["ปรับปรุงความอุดมสมบูรณ์ของดิน ใส่ปุ๋ยโพแทสเซียมให้เพียงพอ", "เมื่อระบาดรุนแรงพ่นสารป้องกันกำจัดเชื้อรา"], "active_ingredients": ["โพรพิโคนาโซล (propiconazole)", "แมนโคเซบ (mancozeb)"], "prevention": ["คลุกเมล็ดพันธุ์ด้วยสารป้องกันเชื้อรา", "ใช้เมล็ดพันธุ์ที่สะอาด"]}, {"id": "rice_brown_planthopper", "crop": "ข้าว", "category": "pest", "name_th": "เพลี้ยกระโดดสีน้ำตาล", "name_en": "Brown Planthopper", "cause": "แมลง Nilaparvata lugens ดูดน้ำเลี้ยงที่โคนต้นข้าว", "symptoms": ["พบแมลงตัวเล็กสีน้ำตาลเกาะที่โคนกอข้าว", "ต้นข้าวเหลืองแห้งเป็นหย่อม ๆ (อาการไหม้ฮอปเปอร์)", "อาจพบโรคใบหงิกหรือโรคเขียวเตี้ยร่วมด้วย"], "treatment": ["ระบายน้ำออกจากแปลงเพื่อลดความชื้นที่โคนต้น", "ถ้าพบเกิน 10 ตัวต่อกอ ให้ใช้สารเคมีที่แนะนำ", "หลีกเลี่ยงสารกลุ่มไพรีทรอยด์และสารที่ทำลายศัตรูธรรมชาติ"], "active_ingredients": ["บูโพรเฟซิน (buprofezin)", "ไดโนทีฟูแรน (dinotefuran)"], "prevention": ["ใช้พันธุ์ต้านทาน", "ไม่ปลูกข้าวหนาแน่นและไม่ใส่ปุ๋ยไนโตรเจนมากเกินไป", "อนุรักษ์ศัตรูธรรมชาติ เช่น แมงมุม มวนเขียวดูดไข่"]}, {"id": "cassava_mosaic", "crop": "มันสำปะหลัง", "category": "disease", "name_th": "โรคใบด่างมันสำปะหลัง", "name_en": "Cassava Mosaic Disease", "cause": "เชื้อไวรัส (Sri Lankan cassava mosaic virus) มีแมลงหวี่ขาวเป็นพาหะ", "symptoms": ["ใบด่างเหลืองสลับเขียว", "ใบหงิกเสียรูป ลดขนาด", "ต้นแคระแกร็น ผลผลิตลดลง"], "treatment": ["ถอนต้นที่เป็นโรคแล้วทำลายทันที (ฝังหรือเผา) ไม่มีสารเคมีรักษาไวรัสได้", "แจ้งเจ้าหน้าที่เกษตรในพื้นที่", "ควบคุมแมลงหวี่ขาวที่เป็นพาหะ"], "active_ingredients": ["ไม่มียารักษาโรคไวรัส — ใช้สารควบคุมแมลงหวี่ขาวตามคำแนะนำ"], "prevention": ["ใช้ท่อนพันธุ์สะอาดจากแหล่งที่ปลอดโรค", "ไม่นำท่อนพันธุ์จากพื้นที่ระบาด", "สำรวจแปลงสม่ำเสมอ"]}, {"id": "cassava_mealybug", "crop": "มันสำปะหลัง", "category": "pest", "name_th": "เพลี้ยแป้งมันสำปะหลัง", "name_en": "Cassava Mealybug", "cause": "แมลง Phenacoccus manihoti ดูดน้ำเลี้ยงที่ยอด", "symptoms": ["พบกลุ่มแมลงตัวขาวมีผงแป้งที่ยอดและใต้ใบ", "ยอดหงิกเป็นพุ่ม (ยอดกระจุก)", "ใบเหลือง ต้นชะงักการเจริญเติบโต"], "treatment": ["ตัดยอดที่มีเพลี้ยแป้งไปทำลาย", "ปล่อยแตนเบียนเพลี้ยแป้ง (Anagyrus lopezi) ตามคำแนะนำ", "ถ้าระบาดรุนแรงใช้สารเคมีตามคำแนะนำ"], "active_ingredients": ["ไทอะมีทอกแซม (thiamethoxam) สำหรับแช่ท่อนพันธุ์ก่อนปลูก"], "prevention": ["แช่ท่อนพันธุ์ก่อนปลูก", "ใช้ท่อนพันธุ์ที่ไม่มีเพลี้ยแป้ง"]}, {"id": "durian_phytophthora", "crop": "ทุเรียน", "category": "disease", "name_th": "โรครากเน่าโคนเน่าทุเรียน", "name_en": "Phytophthora Root & Stem Rot", "cause": "เชื้อรา Phytophthora palmivora", "symptoms": ["เปลือกลำต้นหรือโคนต้นมีรอยช้ำ ฉ่ำน้ำ มีน้ำเยิ้ม", "เนื้อไม้ใต้เปลือกเป็นสีน้ำตาล", "ใบเหลือง ร่วง กิ่งแห้งตาย"], "treatment": ["ถากเปลือกส่วนที่เป็นโรคออก แล้วทาสารป้องกันกำจัดเชื้อรา", "ฉีดสารฟอสฟอนิกเข้าลำต้นตามคำแนะนำ", "ปรับปรุงการระบายน้ำในสวน"], "active_ingredients": ["เมทาแลกซิล (metalaxyl)", "ฟอสอีทิล-อะลูมิเนียม (fosetyl-Al)", "กรดฟอสฟอนิก (phosphonic acid)"], "prevention": ["ใช้เชื้อไตรโคเดอร์มาร่วมกับปุ๋ยอินทรีย์", "อย่าให้น้ำขังโคนต้น", "ตัดแต่งกิ่งให้โปร่ง"]}, {"id": "mango_anthracnose", "crop": "มะม่วง", "category": "disease", "name_th": "โรคแอนแทรคโนสมะม่วง", "name_en": "Mango Anthracnose", "cause": "เชื้อรา Colletotrichum gloeosporioides", "symptoms": ["จุดหรือแผลสีน้ำตาลถึงดำบนใบอ่อน ช่อดอก และผล", "ช่อดอกแห้งดำ ผลร่วง", "ผลสุกมีแผลยุบสีดำ"], "treatment": ["ตัดแต่งกิ่ง ใบ และช่อดอกที่เป็นโรคไปทำลาย", "พ่นสารป้องกันกำจัดเชื้อราในช่วงแตกใบอ่อนและออกดอก"], "active_ingredients": ["โพรคลอราซ (prochloraz)", "แมนโคเซบ (mancozeb)", "อะซอกซีสโตรบิน (azoxystrobin)"], "prevention": ["ห่อผล", "ตัดแต่งทรงพุ่มให้โปร่ง"]}, {"id": "chili_anthracnose", "crop": "พริก", "category": "disease", "name_th": "โรคกุ้งแห้ง (แอนแทรคโนสพริก)", "name_en": "Chili Anthracnose", "cause": "เชื้อรา Colletotrichum spp.", "symptoms": ["ผลพริกมีแผลช้ำยุบเป็นวงซ้อนกัน", "ผลเหี่ยวแห้งโค้งงอคล้ายกุ้งแห้ง", "อาจพบจุดสีดำ/ส้มบนแผล"], "treatment": ["เก็บผลที่เป็นโรคไปทำลายนอกแปลง", "พ่นสารป้องกันกำจัดเชื้อราตามคำแนะนำ"], "active_ingredients": ["อะซอกซีสโตรบิน (azoxystrobin)", "โพรคลอราซ (prochloraz)", "แมนโคเซบ (mancozeb)"], "prevention": ["ใช้เมล็ดพันธุ์สะอาด แช่น้ำอุ่นก่อนปลูก", "ปลูกหมุนเวียนกับพืชอื่น"]}, {"id": "chili_thrips", "crop": "พริก", "category": "pest", "name_th": "เพลี้ยไฟพริก", "name_en": "Chili Thrips", "cause": "แมลง Scirtothrips dorsalis ดูดน้ำเลี้ยงใบอ่อนและยอด", "symptoms": ["ใบหงิกม้วนขึ้นด้านบน (ใบหงิกหอยนางรม)", "ใต้ใบเป็นรอยสีเงินหรือน้ำตาล", "ยอดแคระแกร็น"], "treatment": ["พ่นน้ำเป็นฝอยเพื่อเพิ่มความชื้นในช่วงแล้ง", "ใช้กับดักกาวสีฟ้า/เหลือง", "ใช้สารเคมีสลับกลุ่มเพื่อป้องกันการดื้อยา"], "active_ingredients": ["สไปนีโทแรม (spinetoram)", "อะบาเมกติน (abamectin)", "อิมิดาโคลพริด (imidacloprid)"], "prevention": ["กำจัดวัชพืชรอบแปลง", "สำรวจใต้ใบสม่ำเสมอ"]}, {"id": "tomato_late_blight", "crop": "มะเขือเทศ", "category": "disease", "name_th": "โรคใบไหม้มะเขือเทศ", "name_en": "Tomato Late Blight", "cause": "เชื้อรา Phytophthora infestans", "symptoms": ["แผลฉ่ำน้ำสีเขียวเข้มถึงน้ำตาลบนใบ ขยายเร็ว", "ใต้ใบมีเส้นใยสีขาวในช่วงอากาศชื้น", "ผลมีแผลสีน้ำตาลแข็ง"], "treatment": ["เด็ดใบและผลที่เป็นโรคไปทำลาย", "พ่นสารป้องกันกำจัดเชื้อราทันทีเมื่อพบอาการ"], "active_ingredients": ["เมทาแลกซิล + แมนโคเซบ (metalaxyl + mancozeb)", "ไดเมโทมอร์ฟ (dimethomorph)"], "prevention": ["ปลูกให้มีระยะห่างระบายอากาศดี", "หลีกเลี่ยงการรดน้ำโดนใบ"]}, {"id": "tomato_yellow_leaf_curl", "crop": "มะเขือเทศ", "category": "disease", "name_th": "โรคใบหงิกเหลืองมะเขือเทศ", "name_en": "Tomato Yellow Leaf Curl Virus", "cause": "เชื้อไวรัส TYLCV มีแมลงหวี่ขาวยาสูบเป็นพาหะ", "symptoms": ["ใบเล็ก ขอบใบม้วนขึ้น สีเหลือง", "ต้นแคระแกร็น", "ติดผลน้อย"], "treatment": ["ถอนต้นที่เป็นโรคไปทำลาย ไม่มีสารเคมีรักษาไวรัส", "ควบคุมแมลงหวี่ขาว"], "active_ingredients": ["ไม่มียารักษาโรคไวรัส — ใช้สารควบคุมแมลงหวี่ขาว เช่น ไดโนทีฟูแรน (dinotefuran) ตามคำแนะนำ"], "prevention": ["ใช้พันธุ์ต้านทาน", "เพาะกล้าในโรงเรือนกันแมลง", "ใช้กับดักกาวเหนียวสีเหลือง"]}, {"id": "corn_fall_armyworm", "crop": "ข้าวโพด", "category": "pest", "name_th": "หนอนกระทู้ข้าวโพดลายจุด", "name_en": "Fall Armyworm", "cause": "หนอนของผีเสื้อ Spodoptera frugiperda กัดกินยอดและใบ", "symptoms": ["ใบมีรูพรุนหรือรอยแทะเป็นแถบโปร่งแสง", "พบมูลหนอนคล้ายขี้เลื่อยในยอด", "หนอนมีจุด 4 จุดเรียงเป็นสี่เหลี่ยมที่ปล้องท้าย และมีรอยตัว Y กลับหัวที่หัว"], "treatment": ["พ่นสารเคมีลงยอดในช่วงเย็น เมื่อพบต้นถูกทำลายเกิน 20%", "สลับกลุ่มสารเพื่อป้องกันการดื้อยา", "ใช้ชีวภัณฑ์ เช่น เชื้อ Bt ในระยะหนอนเล็ก"], "active_ingredients": ["อีมาเมกตินเบนโซเอต (emamectin benzoate)", "สไปนีโทแรม (spinetoram)", "คลอแรนทรานิลิโพรล (chlorantraniliprole)"], "prevention": ["สำรวจแปลงตั้งแต่ข้าวโพดงอก", "ปลูกพร้อมกันในพื้นที่ใกล้เคียง"]}];
+const CONF_TH = 80;
+const CAT = {disease:"โรคพืช", pest:"แมลงศัตรูพืช", healthy:"พืชปกติ", unknown:"ระบุไม่ได้"};
+const SEV_COLOR = {"ไม่มี":"var(--ok)","ต่ำ":"var(--ok)","ปานกลาง":"var(--warn)","สูง":"var(--bad)"};
+const SEV_ADVICE = {
+  "ไม่มี":"พืชดูปกติ ดูแลตามปกติและสำรวจแปลงสม่ำเสมอ",
+  "ต่ำ":"เริ่มมีอาการ ตัดส่วนที่เป็นโรคทิ้ง ใช้วิธีชีวภาพก่อน และเฝ้าดูทุก 3–5 วัน",
+  "ปานกลาง":"ควรเริ่มใช้สารป้องกันกำจัดตามที่แนะนำ ใช้ตามอัตราบนฉลาก และแยกต้นที่เป็นโรค",
+  "สูง":"ระบาดรุนแรง ควรควบคุมทันทีและปรึกษาเจ้าหน้าที่เกษตรในพื้นที่"
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- setup ---------- */
+const crops = [...new Set(KB.map(k=>k.crop))].sort((a,b)=>a.localeCompare(b,"th"));
+$("#crop").innerHTML = `<option value="">ไม่ระบุ</option>` + crops.map(c=>`<option>${esc(c)}</option>`).join("") + `<option value="อื่น ๆ">อื่น ๆ</option>`;
+$("#kbList").innerHTML = KB.map(k=>`<details><summary>${esc(k.name_th)} <span class="src">· ${esc(k.crop)} · ${CAT[k.category]}</span></summary>
+  <p><b>สาเหตุ:</b> ${esc(k.cause)}</p><p><b>อาการ</b></p><ul>${k.symptoms.map(s=>`<li>${esc(s)}</li>`).join("")}</ul>
+  <p><b>สารออกฤทธิ์:</b> ${k.active_ingredients.map(esc).join(", ")}</p></details>`).join("");
+
+/* ใส่ API Key ของกลุ่มตรงนี้ ถ้าอยากให้คนเปิดลิงก์ใช้ได้ทันทีโดยไม่ต้องใส่ Key เอง
+   (คนที่เปิดดูโค้ดหน้าเว็บจะเห็น Key นี้ ควรตั้งข้อจำกัด Key ใน Google AI Studio และลบหลังส่งงาน) */
+const BUILT_IN_KEY = "";
+let imgFile = null, imgURL = null;
+let history = [];
+try { history = JSON.parse(localStorage.getItem("cropdoc_hist")||"[]"); } catch(e){}
+const saveHist = () => { try { localStorage.setItem("cropdoc_hist", JSON.stringify(history.slice(-200))); } catch(e){} };
+let apiKey = BUILT_IN_KEY;
+try { apiKey = localStorage.getItem("cropdoc_key") || BUILT_IN_KEY; const m = localStorage.getItem("cropdoc_model"); if (m) $("#model").value = m; } catch(e){}
+function showKeyState(){
+  $("#keyState").textContent = apiKey ? "· พร้อมใช้งาน" : "· ยังไม่ได้ใส่ Key";
+  if (!apiKey) $("#keyBox").open = true;
+  if (apiKey && !BUILT_IN_KEY) $("#apikey").value = apiKey;
+}
+$("#saveKey").onclick = () => {
+  apiKey = $("#apikey").value.trim() || BUILT_IN_KEY;
+  try { localStorage.setItem("cropdoc_key", $("#apikey").value.trim()); localStorage.setItem("cropdoc_model", $("#model").value); } catch(e){}
+  showKeyState(); if (apiKey) $("#keyBox").open = false;
+};
+$("#model").onchange = () => { try { localStorage.setItem("cropdoc_model", $("#model").value); } catch(e){} };
+showKeyState();
+
+function updateGo(){ $("#go").disabled = !imgFile; }
+
+/* ---------- image input ---------- */
+const drop = $("#drop");
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) setImage(f); });
+$("#file").addEventListener("change",e=>{ const f=e.target.files[0]; if(f) setImage(f); });
+function setImage(f){
+  if(!f.type.startsWith("image/")){ $("#qcMsg").innerHTML=`<div class="notice bad">ไฟล์นี้ไม่ใช่รูปภาพ กรุณาเลือกไฟล์ JPG หรือ PNG</div>`; return; }
+  imgFile=f; if(imgURL) URL.revokeObjectURL(imgURL); imgURL=URL.createObjectURL(f);
+  $("#dropInner").innerHTML=`<img src="${imgURL}" alt="ภาพพืชที่เลือก"><div class="hint" style="margin-top:6px">แตะเพื่อเปลี่ยนภาพ</div>`;
+  $("#qcMsg").innerHTML=""; resetSteps(); updateGo();
+}
+
+/* ---------- workflow steps ---------- */
+function resetSteps(){ document.querySelectorAll("#steps li").forEach(li=>li.className=""); }
+function step(s,state){ const li=document.querySelector(`#steps li[data-s="${s}"]`); if(li) li.className=state; }
+const wait = ms => new Promise(r=>setTimeout(r,ms));
+
+/* ---------- quality check + preprocess ---------- */
+function loadImg(url){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; }); }
+function qualityCheck(img){
+  const W=img.naturalWidth,H=img.naturalHeight, sc=Math.min(1,640/Math.max(W,H));
+  const w=Math.max(3,Math.round(W*sc)),h=Math.max(3,Math.round(H*sc));
+  const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d"); x.drawImage(img,0,0,w,h);
+  const d=x.getImageData(0,0,w,h).data, g=new Float32Array(w*h); let sum=0;
+  for(let i=0;i<w*h;i++){ const v=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2]; g[i]=v; sum+=v; }
+  const bright=sum/(w*h); let n=0,m=0,m2=0;
+  for(let y=1;y<h-1;y++) for(let xx=1;xx<w-1;xx++){ const i=y*w+xx; const L=-4*g[i]+g[i-1]+g[i+1]+g[i-w]+g[i+w]; n++; m+=L; m2+=L*L; }
+  const blur = n? (m2/n - (m/n)**2) : 0;
+  const problems=[];
+  if(Math.min(W,H)<224) problems.push(`ภาพเล็กเกินไป (${W}×${H} px) ถ่ายให้ใกล้ขึ้น`);
+  if(blur<30) problems.push("ภาพเบลอ ถือกล้องให้นิ่งแล้วแตะโฟกัสที่ใบ");
+  if(bright<45) problems.push("ภาพมืดเกินไป ถ่ายในที่มีแสงสว่าง");
+  if(bright>235) problems.push("ภาพสว่างจ้าเกินไป หลบแดดที่ส่องตรง");
+  return {ok:!problems.length, problems, blur:Math.round(blur), bright:Math.round(bright)};
+}
+async function preprocess(img){
+  const W=img.naturalWidth,H=img.naturalHeight, sc=Math.min(1,1024/Math.max(W,H));
+  const c=document.createElement("canvas"); c.width=Math.round(W*sc); c.height=Math.round(H*sc);
+  const x=c.getContext("2d"); x.filter="contrast(1.06) saturate(1.04)"; x.drawImage(img,0,0,c.width,c.height);
+  const blob = await new Promise(r=>c.toBlob(r,"image/jpeg",0.88));
+  return {blob, thumb:(()=>{ const t=document.createElement("canvas"); const s=160/Math.max(c.width,c.height); t.width=Math.round(c.width*s); t.height=Math.round(c.height*s); t.getContext("2d").drawImage(c,0,0,t.width,t.height); return t.toDataURL("image/jpeg",0.7); })()};
+}
+
+/* ---------- AI ---------- */
+function buildPrompt(crop,age,note){
+  const list = KB.map(k=>`- ${k.id}: ${k.name_th} (${k.name_en}) ในพืช${k.crop} [${k.category}]`).join("\n");
+  return `คุณคือ "หมอพืช AI" ผู้เชี่ยวชาญโรคพืชและแมลงศัตรูพืชในประเทศไทย วิเคราะห์ภาพที่แนบมา (ใบไม้/ลำต้น/ผล ที่เกษตรกรถ่าย)
+
+กฎ:
+1. ถ้าภาพไม่ใช่พืช ให้ is_plant=false, category="unknown", confidence=0
+2. เลือก kb_id จากรายการฐานความรู้ด้านล่างก่อนเสมอ ถ้าไม่ตรงรายการใดให้ใช้ "none" แล้วระบุชื่อโรค/แมลงเอง
+3. ถ้าพืชดูปกติ ให้ category="healthy", kb_id="none", affected_area_percent=0
+4. symptoms_observed ต้องเป็นสิ่งที่มองเห็นในภาพจริงเท่านั้น
+5. confidence ต้องสะท้อนความไม่แน่นอนจริง ถ้าภาพไม่ชัดหรืออาการคล้ายหลายโรค ให้ต่ำกว่า 80
+6. ยาให้ใช้ชื่อสามัญของสารออกฤทธิ์ (ไทย + อังกฤษในวงเล็บ) ห้ามใช้ชื่อการค้า ห้ามแนะนำสารที่ไทยแบน เช่น พาราควอต คลอร์ไพริฟอส
+7. ตอบภาษาไทยที่เกษตรกรเข้าใจง่าย
+
+รายการฐานความรู้:
+${list}
+
+ข้อมูลจากเกษตรกร:
+- ชนิดพืช: ${crop||"ไม่ระบุ"}
+- อายุพืช: ${age||"ไม่ระบุ"}
+- ข้อสังเกต: ${note||"ไม่มี"}
+
+ตอบเป็น JSON อย่างเดียว ไม่มีข้อความอื่น ตามรูปแบบนี้:
+{"is_plant":true,"crop":"ชนิดพืชที่เห็น","category":"disease|pest|healthy|unknown","kb_id":"id หรือ none","name_th":"ชื่อโรค/แมลง","name_en":"English name","cause":"สาเหตุ เช่น ชื่อเชื้อหรือแมลง","confidence":0,"symptoms_observed":["..."],"affected_area_percent":0,"treatment":["..."],"active_ingredients":["..."],"reasoning":"เหตุผลสั้น ๆ"}`;
+}
+function parseJSON(t){ const s=t.indexOf("{"), e=t.lastIndexOf("}"); return JSON.parse(t.slice(s,e+1)); }
+function blobToB64(blob){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(",")[1]); r.onerror=rej; r.readAsDataURL(blob); }); }
+async function askAI(blob,crop,age,note){
+  const model = $("#model").value;
+  const body = { contents:[{ parts:[ {inline_data:{mime_type:"image/jpeg", data: await blobToB64(blob)}}, {text: buildPrompt(crop,age,note)} ] }],
+                 generationConfig:{ responseMimeType:"application/json", temperature:0.2 } };
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    { method:"POST", headers:{"Content-Type":"application/json","x-goog-api-key":apiKey}, body:JSON.stringify(body) });
+  const data = await r.json().catch(()=>({}));
+  if (!r.ok) { const e = new Error(data?.error?.message || r.statusText); e.status = r.status; throw e; }
+  const text = (data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+  if (!text) { const e = new Error("empty"); e.status = 0; throw e; }
+  return parseJSON(text);
+}
+function severity(pct,cat){ if(cat==="healthy") return "ไม่มี"; return pct<10?"ต่ำ":pct<=30?"ปานกลาง":"สูง"; }
+function finalize(ai,ms){
+  const pct=Math.max(0,Math.min(100,Math.round(+ai.affected_area_percent||0)));
+  const conf=Math.max(0,Math.min(100,Math.round(+ai.confidence||0)));
+  const cat=CAT[ai.category]?ai.category:"unknown";
+  const item=KB.find(k=>k.id===ai.kb_id);
+  const sev=severity(pct,cat);
+  const expert = ai.is_plant===false || cat==="unknown" || (cat!=="healthy" && conf<CONF_TH);
+  return {
+    isPlant: ai.is_plant!==false, crop: ai.crop||"", cat, conf, pct, sev, expert, fromKB: !!item,
+    name_th: item?item.name_th:(ai.name_th||"ไม่ทราบชื่อ"), name_en: item?item.name_en:(ai.name_en||""),
+    cause: item?item.cause:(ai.cause||""), observed: ai.symptoms_observed||[], kbSymptoms: item?item.symptoms:[],
+    treatment: item?item.treatment:(ai.treatment||[]), ingredients: item?item.active_ingredients:(ai.active_ingredients||[]),
+    prevention: item?(item.prevention||[]):[], reasoning: ai.reasoning||"", ms
+  };
+}
+
+/* ---------- render result ---------- */
+function renderResult(d,thumb,isExample,id){
+  if(!d.isPlant){
+    $("#out").innerHTML=`<div class="notice bad">ภาพนี้ไม่น่าจะเป็นพืช กรุณาถ่ายภาพใบไม้หรือลำต้นใหม่</div>`; return;
+  }
+  const sevIdx = {"ต่ำ":0,"ปานกลาง":1,"สูง":2}[d.sev];
+  const confColor = d.conf>=CONF_TH?"var(--ok)":"var(--warn)";
+  const list = a => a.length?`<ul>${a.map(s=>`<li>${esc(s)}</li>`).join("")}</ul>`:"<p class='src'>-</p>";
+  const fbState = id ? (history.find(h=>h.id===id)?.fb ?? null) : null;
+  $("#out").innerHTML = `
+  <div style="display:grid;gap:14px">
+    ${isExample?`<span class="sample-flag">ตัวอย่างผลลัพธ์ · ยังไม่ได้วิเคราะห์ภาพจริง</span>`:""}
+    ${d.expert?`<div class="notice warn"><b>AI ไม่มั่นใจพอ (${d.conf}% ต่ำกว่าเกณฑ์ ${CONF_TH}%)</b><br>ควรส่งภาพให้ผู้เชี่ยวชาญหรือเจ้าหน้าที่เกษตรตรวจเพิ่ม ผลด้านล่างใช้เป็นการวินิจฉัยเบื้องต้นเท่านั้น</div>`:""}
+    <div class="diag-head">
+      ${thumb?`<img src="${thumb}" alt="ภาพที่วิเคราะห์">`:`<div></div>`}
+      <div>
+        <span class="chip ${d.cat}">${CAT[d.cat]}${d.crop?` · ${esc(d.crop)}`:""}</span>
+        <h3>${d.cat==="healthy"?"พืชดูปกติ ไม่พบโรคหรือแมลง":esc(d.name_th)}</h3>
+        ${d.cat!=="healthy"?`<div class="en">${esc(d.name_en)}${d.cause?` · ${esc(d.cause)}`:""}</div>`:""}
+      </div>
+    </div>
+    <div class="gauges">
+      <div class="gauge"><span class="k">ความมั่นใจของ AI</span><span class="v">${d.conf}%</span>
+        <div class="bar"><span style="width:${d.conf}%;background:${confColor}"></span></div></div>
+      <div class="gauge"><span class="k">พื้นที่เสียหายโดยประมาณ</span><span class="v">${d.pct}%</span>
+        <div class="bar"><span style="width:${d.pct}%;background:${SEV_COLOR[d.sev]}"></span></div></div>
+      <div class="gauge"><span class="k">ระดับความรุนแรง</span><span class="v" style="color:${SEV_COLOR[d.sev]}">${d.sev}</span>
+        <div class="sevscale" aria-label="ต่ำ ต่ำกว่า 10%, ปานกลาง 10–30%, สูง มากกว่า 30%"><i class="${sevIdx===0?"on":""}"></i><i class="${sevIdx===1?"on":""}"></i><i class="${sevIdx===2?"on":""}"></i></div></div>
+    </div>
+    <div class="notice info">${esc(SEV_ADVICE[d.sev])}</div>
+    ${d.cat!=="healthy"?`
+    <div class="sec"><h4>อาการที่พบในภาพ</h4>${list(d.observed)}</div>
+    ${d.kbSymptoms.length?`<details><summary>อาการทั่วไปของโรคนี้ (จากฐานความรู้)</summary>${list(d.kbSymptoms)}</details>`:""}
+    <div class="sec"><h4>แนวทางรักษาเบื้องต้น</h4>${list(d.treatment)}</div>
+    <div class="sec"><h4>สารออกฤทธิ์ที่แนะนำ</h4><div class="pills">${d.ingredients.map(a=>`<span class="pill">${esc(a)}</span>`).join("")||"-"}</div>
+      <span class="src">ใช้ตามอัตราบนฉลาก สวมอุปกรณ์ป้องกันทุกครั้ง</span></div>
+    ${d.prevention.length?`<div class="sec"><h4>ป้องกันครั้งต่อไป</h4>${list(d.prevention)}</div>`:""}
+    <span class="src">ที่มาของคำแนะนำ: ${d.fromKB?"ฐานความรู้ที่กลุ่มตรวจทานแล้ว":"Vision AI (ยังไม่มีในฐานความรู้)"} · วิเคราะห์ใน ${(d.ms/1000).toFixed(1)} วินาที</span>
+    `:""}
+    ${d.reasoning?`<details><summary>เหตุผลของ AI</summary><p>${esc(d.reasoning)}</p></details>`:""}
+    ${id?`<div class="fb"><span>ผลนี้ถูกต้องไหม</span>
+      <button data-fb="1" class="${fbState===1?"sel":""}">ถูกต้อง</button>
+      <button data-fb="0" class="${fbState===0?"sel":""}">ไม่ถูกต้อง</button></div>`:""}
+  </div>`;
+  if(id) document.querySelectorAll("#out [data-fb]").forEach(b=>b.onclick=()=>{
+    const h=history.find(x=>x.id===id); if(!h) return; h.fb=+b.dataset.fb; saveHist(); renderHist();
+    document.querySelectorAll("#out [data-fb]").forEach(x=>x.classList.toggle("sel",x===b));
+  });
+}
+
+/* ---------- history ---------- */
+function renderHist(){
+  const n=history.length, avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const t=avg(history.map(h=>h.ms/1000)), c=avg(history.map(h=>h.conf)), f=history.filter(h=>h.fb===0||h.fb===1);
+  const acc=f.length? f.filter(h=>h.fb===1).length/f.length*100 : null;
+  $("#stats").innerHTML=[
+    ["จำนวนครั้งที่ตรวจ", n],
+    ["เวลาวิเคราะห์เฉลี่ย", t==null?"-":t.toFixed(1)+" วิ"],
+    ["ความมั่นใจเฉลี่ย", c==null?"-":Math.round(c)+"%"],
+    ["ถูกต้องจาก Feedback", acc==null?"-":`${Math.round(acc)}% <span class="src">(${f.length})</span>`]
+  ].map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  $("#histBody").innerHTML = n ? history.slice().reverse().map(h=>`<tr>
+    <td>${new Date(h.time).toLocaleString("th-TH",{dateStyle:"short",timeStyle:"short"})}</td>
+    <td>${esc(h.crop||"-")}</td><td>${esc(h.cat==="healthy"?"พืชปกติ":h.name)}</td><td>${h.conf}%</td>
+    <td><span class="sevdot" style="background:${SEV_COLOR[h.sev]}"></span>${h.sev}${h.expert?" · ส่งผู้เชี่ยวชาญ":""}</td>
+    <td>${(h.ms/1000).toFixed(1)} วิ</td><td>${h.fb===1?"ถูกต้อง":h.fb===0?"ไม่ถูกต้อง":"-"}</td></tr>`).join("")
+    : `<tr><td colspan="7" class="src">ยังไม่มีประวัติ ลองวิเคราะห์ภาพแรกได้เลย</td></tr>`;
+}
+$("#clearHist").onclick=()=>{ history=[]; saveHist(); renderHist(); };
+$("#copyCsv").onclick=async()=>{
+  const rows=[["time","crop","category","name","confidence","affected_pct","severity","needs_expert","seconds","feedback"],
+    ...history.map(h=>[h.time,h.crop,h.cat,h.name,h.conf,h.pct,h.sev,h.expert,(h.ms/1000).toFixed(2),h.fb??""])];
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  try{ await navigator.clipboard.writeText(csv); $("#copyMsg").textContent="คัดลอกแล้ว วางใน Excel หรือ Google Sheets ได้เลย"; }
+  catch(e){ $("#copyMsg").textContent="คัดลอกไม่ได้ในเบราว์เซอร์นี้"; }
+};
+
+/* ---------- run ---------- */
+$("#go").onclick = async ()=>{
+  if(!imgFile) return;
+  if(!apiKey){ $("#keyBox").open=true; $("#qcMsg").innerHTML=`<div class="notice bad">ยังไม่ได้ใส่ Gemini API Key เปิดหัวข้อ "ตั้งค่า Gemini API Key" ด้านบนแล้วใส่ Key ก่อน</div>`; return; }
+  const go=$("#go"); go.disabled=true; go.textContent="กำลังวิเคราะห์...";
+  resetSteps(); $("#qcMsg").innerHTML="";
+  const t0=performance.now();
+  try{
+    step("recv","run"); const img=await loadImg(imgURL); await wait(150); step("recv","done");
+    step("qc","run"); const q=qualityCheck(img); await wait(200);
+    if(!q.ok){ step("qc","fail"); ["pre","ai","conf","sev","kb","out"].forEach(s=>step(s,"skip"));
+      $("#qcMsg").innerHTML=`<div class="notice warn"><b>ภาพยังไม่ผ่าน กรุณาถ่ายใหม่</b><ul style="margin:4px 0 0;padding-left:20px">${q.problems.map(p=>`<li>${p}</li>`).join("")}</ul></div>`; return; }
+    step("qc","done");
+    step("pre","run"); const {blob,thumb}=await preprocess(img); step("pre","done");
+    step("ai","run"); const ai=await askAI(blob,$("#crop").value,$("#age").value.trim(),$("#note").value.trim()); step("ai","done");
+    const d=finalize(ai,performance.now()-t0);
+    step("conf", d.expert?"fail":"done"); await wait(120);
+    step("sev","done"); await wait(120);
+    step("kb", d.fromKB||d.cat==="healthy"?"done":"skip");
+    const id=Date.now().toString(36);
+    history.push({id,time:new Date().toISOString(),crop:d.crop||$("#crop").value,cat:d.cat,name:d.name_th,conf:d.conf,pct:d.pct,sev:d.sev,expert:d.expert,ms:Math.round(d.ms),fb:null});
+    saveHist(); renderHist(); step("out","done");
+    renderResult(d,thumb,false,id);
+    if(window.innerWidth<860) $("#result").scrollIntoView({behavior:"smooth"});
+  }catch(e){
+    document.querySelectorAll("#steps li.run").forEach(li=>li.className="fail");
+    const st = e?.status;
+    const msg = (st===400 && /api key/i.test(e.message)) || st===401 || st===403 ? "API Key ไม่ถูกต้อง ตรวจสอบ Key ในหัวข้อตั้งค่าอีกครั้ง"
+      : st===404 ? "ไม่พบโมเดลนี้ ลองเปลี่ยนโมเดลในหัวข้อตั้งค่า"
+      : st===429 ? "ใช้งานถี่เกินโควตาฟรี รอสักครู่แล้วลองใหม่"
+      : st===undefined && e instanceof TypeError ? "เชื่อมต่ออินเทอร์เน็ตไม่ได้ ตรวจสอบเน็ตแล้วลองใหม่"
+      : "AI ตอบกลับไม่สำเร็จ ลองกดวิเคราะห์อีกครั้ง" + (e?.message?` (${esc(e.message).slice(0,120)})`:"");
+    $("#qcMsg").innerHTML=`<div class="notice bad">${msg}</div>`;
+  }finally{ go.textContent="วิเคราะห์ภาพ"; updateGo(); }
+};
+
+/* ---------- initial example ---------- */
+const EX = finalize({is_plant:true,crop:"ข้าว",category:"disease",kb_id:"rice_blast",confidence:91,affected_area_percent:18,
+  symptoms_observed:["แผลรูปตาสีเทาตรงกลาง ขอบสีน้ำตาล กระจายบนใบ","แผลบางจุดขยายต่อกันเป็นปื้น"],
+  reasoning:"ลักษณะแผลรูปกระสวย ตรงกลางสีเทาขอบน้ำตาล เป็นอาการเด่นของโรคไหม้ข้าว"},4200);
+renderResult(EX,null,true,null);
+renderHist();
+</script>
+</body>
+</html>
